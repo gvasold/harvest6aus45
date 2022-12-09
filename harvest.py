@@ -19,9 +19,9 @@ OUTPUT_DIR = "data"
 class SingleLineDraw(UserDict):
     "Helper class to collect draws before 2010."
 
-    def __init__(self, year_, currency="EUR"):
+    def __init__(self, year, currency="EUR"):
         super().__init__()
-        self.year = year_
+        self.year = year
         self.currency = currency
 
     def parse(self, line: str) -> None:
@@ -141,117 +141,123 @@ class DoubleLineDraw(SingleLineDraw):
                     )
 
 
-class DataFetcher:
-    "Helper class which knows how to fetch and parse different years."
-
-    def __init__(self, year_):
-        self.year = year_
-        self.data = []
-        if self.year > 2017:
-            self.data = self.harvest_modern(year_)
-        elif year_ == 2017:  # partly old format
-            self.data = self.harvest_2010_to_2017(year_)
-            self.data += self.harvest_modern(year_)
-        elif year_ > 2010:
-            self.data = self.harvest_2010_to_2017(year_)
-        elif year_ == 2010:  # partly very old format
-            self.data = self.harvest_pre_2011(year_)
-            self.data += self.harvest_2010_to_2017(year_)
-        else:
-            self.data = self.harvest_pre_2011(year_)
-
-    @classmethod
-    def harvest_modern(cls, year_: int) -> List[Dict]:
-        "Beginning from February 2017 we have yearly csv files."
-        results = []
-        url = BASEURL + str(year_) + ".csv"
-        resp = requests.get(url)
-        resp.raise_for_status()
-        for i, line in enumerate(resp.text.split("\n")):
-            if line:
-                if i > 0:
-                    if i % 2 > 0:
-                        line_data = DoubleLineDraw(year_)
-                        line_data.parse(line)
-                    else:
-                        line_data.parse_second_line(line)
-                        results.append(line_data.data)
-        return results
-
-    @classmethod
-    def harvest_2010_to_2017(cls, year_):
-        """Date from 2010 until February of 2017 is in one csv file."""
-        url = "https://www.win2day.at/media/lotto-ziehungen-2010-2017.csv"
-        results = []
-        resp = requests.get(url)
-        resp.raise_for_status()
-        csv_year = 0
-        line_counter = 0
-        for line in resp.text.split("\n"):
-            if (
-                line.strip()
-                and not line.startswith(";;;;;;;;;")
-                and not re.match(r"^\s*Datum", line)
-            ):
-                match = re.match(r"(\d{4}) Lotto - Beträge in EUR", line)
-                if match:
-                    csv_year = int(match.group(1))
-                elif csv_year == year_:
-                    line_counter += 1
-                    if line_counter % 2 > 0:
-                        line_data = DoubleLineDraw(year_)
-                        # 2010-2017 has the weekday as first element.
-                        # If we strip it, we can user normal Draw class
-                        line_data.parse(line.split(";", 1)[1])
-                    else:
-                        line_data.parse_second_line(line.split(";", 1)[1])
-                        results.append(line_data.data)
-        return results
-
-    @classmethod
-    def harvest_pre_2011(cls, year_: int) -> None:
-        """Result before Sept 5 2010 have a different format."""
-        url = "https://www.win2day.at/media/lotto-ziehungen-1986-2010.csv"
-        results = []
-        resp = requests.get(url)
-        resp.raise_for_status()
-        # if not os.path.exists("x.csv"):
-        #    with open("x.csv", "w", encoding="utf-8") as fh:
-        #        fh.write(resp.text)
-
-        csv_year = 0
-        currency = "EUR"
-        # with open("x.csv", encoding="utf-8") as fh:
-        for line in resp.text.split("\n"):
-            if (
-                line.strip()
-                and not re.match(r"[;\s]{8}", line)
-                and not line.startswith(";;Zahlen")
-                and not line.startswith("(Einführung von")
-                and not re.match(r"^\s*Datum", line)
-                and not "verschoben" in line
-                and not "e n t f a l l e n" in line
-            ):
-                match = re.match(r"(\d{4}) Lotto - Beträge in (\w+)", line)
-                if match:
-                    csv_year = int(match.group(1))
-                    currency = match.group(2)
-                elif csv_year == year_:
-                    line_data = SingleLineDraw(year_, currency)
+def harvest_modern(year: int) -> List[Dict]:
+    "Beginning from February 2017 we have yearly csv files."
+    results = []
+    url = BASEURL + str(year) + ".csv"
+    resp = requests.get(url)
+    resp.raise_for_status()
+    for i, line in enumerate(resp.text.split("\n")):
+        if line:
+            if i > 0:
+                if i % 2 > 0:
+                    line_data = DoubleLineDraw(year)
                     line_data.parse(line)
+                else:
+                    line_data.parse_second_line(line)
                     results.append(line_data.data)
-        return results
+    return results
 
 
-def write_json(data_: List, data_dir: str, year_: int) -> None:
-    "Write data_ of a single year into a json file in data_dir."
+def harvest_2010_to_2017(year):
+    """Return data for a single year between 2010 and 2017.
+
+    Data from 2010 until February of 2017 is in one csv file
+    and has an additional field.
+    """
+    url = "https://www.win2day.at/media/lotto-ziehungen-2010-2017.csv"
+    results = []
+    resp = requests.get(url)
+    resp.raise_for_status()
+    csv_year = 0
+    line_counter = 0
+    for line in resp.text.split("\n"):
+        if (
+            line.strip()
+            and not line.startswith(";;;;;;;;;")
+            and not re.match(r"^\s*Datum", line)
+        ):
+            match = re.match(r"(\d{4}) Lotto - Beträge in EUR", line)
+            if match:
+                csv_year = int(match.group(1))
+            elif csv_year == year:
+                line_counter += 1
+                if line_counter % 2 > 0:
+                    line_data = DoubleLineDraw(year)
+                    # 2010-2017 has the weekday as first element.
+                    # If we strip it, we can user normal Draw class
+                    line_data.parse(line.split(";", 1)[1])
+                else:
+                    line_data.parse_second_line(line.split(";", 1)[1])
+                    results.append(line_data.data)
+    return results
+
+
+def harvest_pre_2011(year: int) -> None:
+    """Harvest a single year before 2011.
+
+    Results before Sept 5 2010 have a different format:
+        * onley on line
+        * not 4+zz, 3+zz
+    """
+    url = "https://www.win2day.at/media/lotto-ziehungen-1986-2010.csv"
+    results = []
+    resp = requests.get(url)
+    resp.raise_for_status()
+
+    csv_year = 0
+    currency = "EUR"
+    for line in resp.text.split("\n"):
+        if (
+            line.strip()
+            and not re.match(r"[;\s]{8}", line)
+            and not line.startswith(";;Zahlen")
+            and not line.startswith("(Einführung von")
+            and not re.match(r"^\s*Datum", line)
+            and not "verschoben" in line
+            and not "e n t f a l l e n" in line
+        ):
+            match = re.match(r"(\d{4}) Lotto - Beträge in (\w+)", line)
+            if match:
+                csv_year = int(match.group(1))
+                currency = match.group(2)
+            elif csv_year == year:
+                line_data = SingleLineDraw(year, currency)
+                line_data.parse(line)
+                results.append(line_data.data)
+    return results
+
+
+def fetch_data(year):
+    """Harvest data for a single year.
+
+    This function knows how to deal with changing format.
+    """
+    data = []
+    if year > 2017:
+        data = harvest_modern(year)
+    elif year == 2017:  # partly old format
+        data = harvest_2010_to_2017(year)
+        data += harvest_modern(year)
+    elif year > 2010:
+        data = harvest_2010_to_2017(year)
+    elif year == 2010:  # partly very old format
+        data = harvest_pre_2011(year)
+        data += harvest_2010_to_2017(year)
+    else:
+        data = harvest_pre_2011(year)
+    return data
+
+
+def write_json(data: List, data_dir: str, year: int) -> None:
+    "Write data of a single year into a json file in data_dir."
     os.makedirs(os.path.join(data_dir, "json"), exist_ok=True)
-    filename = os.path.join(data_dir, "json", f"{year_}.json")
+    filename = os.path.join(data_dir, "json", f"{year}.json")
     with open(filename, "w", encoding="utf-8") as jsonfile:
-        json.dump(data_, jsonfile, ensure_ascii=False)
+        json.dump(data, jsonfile, ensure_ascii=False)
 
 
-def write_csv(data: List, data_dir: str, year_: int) -> None:
+def write_csv(data: List, data_dir: str, year: int) -> None:
     "Write data_ of a single year into a csv file."
     rows = []
     rows.append(
@@ -310,7 +316,7 @@ def write_csv(data: List, data_dir: str, year_: int) -> None:
         row.append(draw["results"]["3"]["winnings"])
         rows.append(row)
     os.makedirs(os.path.join(data_dir, "csv"), exist_ok=True)
-    filename = os.path.join(data_dir, "csv", f"{year_}.csv")
+    filename = os.path.join(data_dir, "csv", f"{year}.csv")
     with open(filename, "w", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile, delimiter=";")
         writer.writerows(rows)
@@ -352,9 +358,14 @@ def parse_args():
     return args_
 
 
+def main(years: List[int], output_dir: str) -> None:
+    "Run the script."
+    for year in years:
+        data = fetch_data(year)
+        write_json(data, output_dir, year)
+        write_csv(data, output_dir, year)
+
+
 if __name__ == "__main__":
     args = parse_args()
-    for year in args.years:
-        data_fetcher = DataFetcher(year)
-        write_json(data_fetcher.data, args.output_dir, year)
-        write_csv(data_fetcher.data, args.output_dir, year)
+    main(args.years, args.output_dir)
