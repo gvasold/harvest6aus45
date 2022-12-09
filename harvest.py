@@ -347,20 +347,26 @@ def parse_args():
     parser.add_argument(
         "-o", "--output-dir", default=OUTPUT_DIR, help="output directory"
     )
+    parser.add_argument("-f", "--format", choices=['csv', 'json','both'],
+        default='both',
+        help=("Set the output format. Allowed values are 'json', 'csv' or 'both'. "
+              "If not set or set to 'both', csv and json output will be produced."))
     args_ = parser.parse_args()
     if min(args_.years) < 1986:
         raise ValueError("No data before 1986.")
     return args_
 
 
-def main(years: List[int], output_dir: str) -> None:
+def main(years: List[int], output_dir: str, format: str) -> None:
     "Run the script."
     for year in years:
         data = fetch_data(year)
-        write_json(data, output_dir, year)
-        write_csv(data, output_dir, year)
+        if format in ('json', 'both'):
+            write_json(data, output_dir, year)
+        elif format in ('csv', 'both'):
+            write_csv(data, output_dir, year)
 
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.years, args.output_dir)
+    main(args.years, args.output_dir, args.format)
