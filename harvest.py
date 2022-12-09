@@ -141,21 +141,34 @@ class DoubleLineDraw(SingleLineDraw):
                     )
 
 
+def read_from_url(url):
+    "Yield each line from url."
+    resp = requests.get(url)
+    resp.raise_for_status()
+    for line in resp.text.split("\n"):
+        if (
+            line.strip()
+            and not re.match(r"[;\s]{8}", line)
+            and not re.match(r"^\s*Datum", line)
+            and not line.startswith(";;Zahlen")
+            and not line.startswith("(Einführung von")
+            and not "verschoben" in line
+            and not "e n t f a l l e n" in line
+        ):
+            yield line
+
+
 def harvest_modern(year: int) -> List[Dict]:
     "Beginning from February 2017 we have yearly csv files."
     results = []
     url = BASEURL + str(year) + ".csv"
-    resp = requests.get(url)
-    resp.raise_for_status()
-    for i, line in enumerate(resp.text.split("\n")):
-        if line:
-            if i > 0:
-                if i % 2 > 0:
-                    line_data = DoubleLineDraw(year)
-                    line_data.parse(line)
-                else:
-                    line_data.parse_second_line(line)
-                    results.append(line_data.data)
+    for i, line in enumerate(read_from_url(url)):
+        if i % 2 == 0:
+            line_data = DoubleLineDraw(year)
+            line_data.parse(line)
+        else:
+            line_data.parse_second_line(line)
+            results.append(line_data.data)
     return results
 
 
@@ -165,31 +178,24 @@ def harvest_2010_to_2017(year):
     Data from 2010 until February of 2017 is in one csv file
     and has an additional field.
     """
-    url = "https://www.win2day.at/media/lotto-ziehungen-2010-2017.csv"
     results = []
-    resp = requests.get(url)
-    resp.raise_for_status()
+    url = "https://www.win2day.at/media/lotto-ziehungen-2010-2017.csv"
     csv_year = 0
     line_counter = 0
-    for line in resp.text.split("\n"):
-        if (
-            line.strip()
-            and not line.startswith(";;;;;;;;;")
-            and not re.match(r"^\s*Datum", line)
-        ):
-            match = re.match(r"(\d{4}) Lotto - Beträge in EUR", line)
-            if match:
-                csv_year = int(match.group(1))
-            elif csv_year == year:
-                line_counter += 1
-                if line_counter % 2 > 0:
-                    line_data = DoubleLineDraw(year)
-                    # 2010-2017 has the weekday as first element.
-                    # If we strip it, we can user normal Draw class
-                    line_data.parse(line.split(";", 1)[1])
-                else:
-                    line_data.parse_second_line(line.split(";", 1)[1])
-                    results.append(line_data.data)
+    for line in read_from_url(url):
+        match = re.match(r"(\d{4}) Lotto - Beträge in EUR", line)
+        if match:
+            csv_year = int(match.group(1))
+        elif csv_year == year:
+            line_counter += 1
+            if line_counter % 2 > 0:
+                line_data = DoubleLineDraw(year)
+                # 2010-2017 has the weekday as first element.
+                # If we strip it, we can user normal Draw class
+                line_data.parse(line.split(";", 1)[1])
+            else:
+                line_data.parse_second_line(line.split(";", 1)[1])
+                results.append(line_data.data)
     return results
 
 
@@ -202,29 +208,18 @@ def harvest_pre_2011(year: int) -> None:
     """
     url = "https://www.win2day.at/media/lotto-ziehungen-1986-2010.csv"
     results = []
-    resp = requests.get(url)
-    resp.raise_for_status()
 
     csv_year = 0
     currency = "EUR"
-    for line in resp.text.split("\n"):
-        if (
-            line.strip()
-            and not re.match(r"[;\s]{8}", line)
-            and not line.startswith(";;Zahlen")
-            and not line.startswith("(Einführung von")
-            and not re.match(r"^\s*Datum", line)
-            and not "verschoben" in line
-            and not "e n t f a l l e n" in line
-        ):
-            match = re.match(r"(\d{4}) Lotto - Beträge in (\w+)", line)
-            if match:
-                csv_year = int(match.group(1))
-                currency = match.group(2)
-            elif csv_year == year:
-                line_data = SingleLineDraw(year, currency)
-                line_data.parse(line)
-                results.append(line_data.data)
+    for line in read_from_url(url):
+        match = re.match(r"(\d{4}) Lotto - Beträge in (\w+)", line)
+        if match:
+            csv_year = int(match.group(1))
+            currency = match.group(2)
+        elif csv_year == year:
+            line_data = SingleLineDraw(year, currency)
+            line_data.parse(line)
+            results.append(line_data.data)
     return results
 
 
