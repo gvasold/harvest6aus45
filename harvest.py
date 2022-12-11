@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Harvest Lotto stats from win2day.
 
 run havest_stats.py -h for usage.
