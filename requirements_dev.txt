@@ -1,0 +1,4 @@
+black>=22.12.0
+pylint>=2.15.8
+pytest>=7.2.0
+responses>=0.22.0

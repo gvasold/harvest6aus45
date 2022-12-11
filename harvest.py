@@ -50,11 +50,12 @@ class SingleLineDraw(UserDict):
         ]
         results = {"currency": self.currency}
         for label, count_id, winnings_id in fields_of_interrest:
-            count = fields[count_id]
-            winnings = fields[winnings_id]
-            if "JP" in count:
+            if "JP" in fields[count_id]:
                 count = 0
                 winnings = 0
+            else:
+                count = self.clean_count(fields[count_id])
+                winnings = float(self.clean_number_str(fields[winnings_id]))
             results[label] = {"count": count, "winnings": winnings}
         self.data["results"] = results
 
@@ -128,6 +129,7 @@ class DoubleLineDraw(SingleLineDraw):
             match = re.match(r"(\d)er(.*)", field)
             if match:
                 win_name = match.group(1) + match.group(2).replace(" + ", "")
+                win_name = win_name.upper()
                 self.data["results"][win_name] = {}
                 if "JP" in fields[i + 1]:
                     self.data["results"][win_name]["count"] = 0
