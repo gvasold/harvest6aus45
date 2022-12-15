@@ -247,12 +247,15 @@ def fetch_data(year):
     return data
 
 
-def write_json(data: List, data_dir: str, year: int) -> None:
+def write_json(data: List, data_dir: str, year: int, indent: bool = False) -> None:
     "Write data of a single year into a json file in data_dir."
     os.makedirs(os.path.join(data_dir, "json"), exist_ok=True)
     filename = os.path.join(data_dir, "json", f"{year}.json")
     with open(filename, "w", encoding="utf-8") as jsonfile:
-        json.dump(data, jsonfile, ensure_ascii=False)
+        if indent:
+            json.dump(data, jsonfile, ensure_ascii=False, indent=2)
+        else:
+            json.dump(data, jsonfile, ensure_ascii=False)
 
 
 def write_csv(data: List, data_dir: str, year: int) -> None:
@@ -350,26 +353,39 @@ def parse_args():
     parser.add_argument(
         "-o", "--output-dir", default=OUTPUT_DIR, help="output directory"
     )
-    parser.add_argument("-f", "--format", choices=['csv', 'json','both'],
-        default='both',
-        help=("Set the output format. Allowed values are 'json', 'csv' or 'both'. "
-              "If not set or set to 'both', csv and json output will be produced."))
+    parser.add_argument(
+        "-i",
+        "--indent",
+        action="store_true",
+        default=False,
+        help="Set this flag to create 'pretty' json.",
+    )
+    parser.add_argument(
+        "-f",
+        "--format",
+        choices=["csv", "json", "both"],
+        default="both",
+        help=(
+            "Set the output format. Allowed values are 'json', 'csv' or 'both'. "
+            "If not set or set to 'both', csv and json output will be produced."
+        ),
+    )
     args_ = parser.parse_args()
     if min(args_.years) < 1986:
         raise ValueError("No data before 1986.")
     return args_
 
 
-def main(years: List[int], output_dir: str, format: str) -> None:
+def main(years: List[int], output_dir: str, format: str, indent: bool = False) -> None:
     "Run the script."
     for year in years:
         data = fetch_data(year)
-        if format in ('json', 'both'):
-            write_json(data, output_dir, year)
-        elif format in ('csv', 'both'):
+        if format in ("json", "both"):
+            write_json(data, output_dir, year, indent)
+        if format in ("csv", "both"):
             write_csv(data, output_dir, year)
 
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.years, args.output_dir, args.format)
+    main(args.years, args.output_dir, args.format, args.indent)
